@@ -60,3 +60,7 @@ ________________________________________
 •	Data privacy & security
 
 ![FLOW DIAGRAM](image.png)
+
+![System architecture](architecture.png)
+
+![Database Schema](dbschema.jpeg)
