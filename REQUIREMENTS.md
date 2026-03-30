@@ -59,4 +59,4 @@ ________________________________________
 •	Rate limiting 
 •	Data privacy & security
 
-![FLOW DIAGRAM](C:\Users\simle\OneDrive\Desktop\doctorbs\DoctorAppointmentSystem\image.png)
+![FLOW DIAGRAM](image.png)
