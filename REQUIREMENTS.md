@@ -1,8 +1,8 @@
 📘 1. COMPLETE REQUIREMENTS DOCUMENT
 🎯 Actors
-	Patient 	
-	Doctor 
-	Admin 
+•	Patient 
+•	Doctor 
+•	Admin 
 ________________________________________
 👤 Patient Features
 •	Register/Login 
