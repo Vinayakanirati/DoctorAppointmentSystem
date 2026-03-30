@@ -28,11 +28,11 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     public void run(String... args) throws Exception {
         // Create Admin
-        if (!userRepository.existsByEmail("root")) {
+        if (!userRepository.existsByEmail("vivekperla333@gmail.com")) {
             User admin = new User();
             admin.setName("Default Admin");
-            admin.setEmail("root");
-            admin.setPassword(passwordEncoder.encode("1234"));
+            admin.setEmail("vivekperla333@gmail.com");
+            admin.setPassword(passwordEncoder.encode("123456"));
             admin.setRole(Role.ADMIN);
             admin.setPhone("0000000000");
             userRepository.save(admin);
@@ -84,28 +84,29 @@ public class DataSeeder implements CommandLineRunner {
         // Create slots for next 7 days
         for (int day = 0; day < 7; day++) {
             LocalDateTime dayStart = today.plusDays(day);
-            
+
             // Create 30-minute slots from 8 AM to 5 PM, excluding 1-2 PM lunch
             for (int hour = 8; hour < 17; hour++) {
                 // Skip lunch hour (1 PM - 2 PM, hour 13)
-                if (hour == 13) continue;
-                
+                if (hour == 13)
+                    continue;
+
                 // Create two 30-minute slots per hour
                 for (int minute = 0; minute < 60; minute += 30) {
                     LocalDateTime slotStart = dayStart.withHour(hour).withMinute(minute);
                     LocalDateTime slotEnd = slotStart.plusMinutes(30);
-                    
+
                     Slot slot = new Slot();
                     slot.setDoctor(doctor);
                     slot.setStartTime(slotStart);
                     slot.setEndTime(slotEnd);
                     slot.setBooked(false);
-                    
+
                     slotRepository.save(slot);
                 }
             }
         }
-        
+
         System.out.println("  ✓ Created test slots for Dr. " + doctor.getName());
     }
 }

@@ -50,6 +50,7 @@ public class AuthServiceTest {
         req.setEmail("test@patient.com");
         req.setPassword("pass123");
         req.setRole(Role.PATIENT);
+        req.setPhone("1234567890");
 
         when(userRepository.existsByEmail("test@patient.com")).thenReturn(false);
         when(passwordEncoder.encode("pass123")).thenReturn("encoded123");
@@ -59,11 +60,10 @@ public class AuthServiceTest {
             return u;
         });
 
-        AuthResponse res = authService.register(req);
+        String res = authService.register(req);
 
         assertNotNull(res);
-        assertEquals("test@patient.com", res.getEmail());
-        assertEquals(Role.PATIENT, res.getRole());
+        assertTrue(res.contains("OTP sent successfully"));
     }
 
     @Test
@@ -72,10 +72,11 @@ public class AuthServiceTest {
         User mockUser = new User();
         mockUser.setEmail("test@test.com");
         mockUser.setRole(Role.ADMIN);
+        mockUser.setVerified(true);
 
-        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(null);
         when(userRepository.findByEmail("test@test.com")).thenReturn(Optional.of(mockUser));
         when(jwtUtil.generateToken(mockUser)).thenReturn("mock-jwt-token");
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(null);
 
         AuthResponse res = authService.login(req);
 

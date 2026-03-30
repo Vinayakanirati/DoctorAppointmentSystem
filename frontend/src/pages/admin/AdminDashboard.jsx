@@ -8,41 +8,38 @@ import { Bar, Pie } from 'react-chartjs-2';
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
 const AdminDashboard = () => {
-  const [analytics, setAnalytics] = useState(null);
+  const [allDoctors, setAllDoctors] = useState([]);
+  const [allPatients, setAllPatients] = useState([]);
+  const [allAppointments, setAllAppointments] = useState([]);
   const [pendingDoctors, setPendingDoctors] = useState([]);
+  const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [verifyingId, setVerifyingId] = useState(null);
   const [verifyError, setVerifyError] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending'); // pending, doctors, patients, appointments
 
   const fetchData = async () => {
     try {
       setError(null);
       setLoading(true);
       
-      // Fetch analytics and pending doctors in parallel
-      const [resAnalytics, resDoctors] = await Promise.all([
+      const [resAnalytics, resPending, resDoctors, resPatients, resAppointments] = await Promise.all([
         api.get('/admin/analytics'),
-        api.get('/admin/doctors/pending')
+        api.get('/admin/doctors/pending'),
+        api.get('/admin/doctors'),
+        api.get('/admin/patients'),
+        api.get('/admin/appointments')
       ]);
       
-      // Validate API responses
-      if (!resAnalytics.data) {
-        throw new Error('Failed to fetch analytics data');
-      }
-      
-      if (!Array.isArray(resDoctors.data)) {
-        throw new Error('Invalid pending doctors data format');
-      }
-      
       setAnalytics(resAnalytics.data);
-      setPendingDoctors(resDoctors.data);
+      setPendingDoctors(resPending.data);
+      setAllDoctors(resDoctors.data);
+      setAllPatients(resPatients.data);
+      setAllAppointments(resAppointments.data);
     } catch (err) {
       console.error('Error fetching admin data:', err);
-      const errorMessage = err.response?.data?.message || err.message || 'Failed to load admin dashboard data';
-      setError(errorMessage);
-      setAnalytics(null);
-      setPendingDoctors([]);
+      setError('Failed to load admin dashboard data');
     } finally {
       setLoading(false);
     }
@@ -52,152 +49,72 @@ const AdminDashboard = () => {
     fetchData();
   }, []);
 
+  const handleDeleteUser = async (userId, name) => {
+    if (!window.confirm(`Are you sure you want to delete ${name}? This action cannot be undone.`)) return;
+    try {
+      await api.delete(`/admin/users/${userId}`);
+      fetchData();
+    } catch (err) {
+      alert('Failed to delete user');
+    }
+  };
+
+  const handleDeleteAppointment = async (id) => {
+    if (!window.confirm('Delete this appointment?')) return;
+    try {
+      await api.delete(`/admin/appointments/${id}`);
+      fetchData();
+    } catch (err) {
+      alert('Failed to delete appointment');
+    }
+  };
+
   const handleVerify = async (doctorId, doctorName) => {
     try {
       setVerifyError(null);
       setVerifyingId(doctorId);
-      
-      // Validate input
-      if (!doctorId || doctorId <= 0) {
-        throw new Error('Invalid doctor profile ID');
-      }
-      
-      const response = await api.patch(`/admin/doctors/${doctorId}/verify`);
-      
-      if (response.status === 200 || response.status === 204) {
-        console.log(`Successfully verified doctor: ${doctorName}`);
-        // Refresh data after successful verification
-        await fetchData();
-      } else {
-        throw new Error('Unexpected response from server');
-      }
+      await api.patch(`/admin/doctors/${doctorId}/verify`);
+      await fetchData();
     } catch (err) {
-      console.error(`Error verifying doctor ${doctorId}:`, err);
-      
-      let errorMsg = 'Failed to verify doctor';
-      if (err.response?.status === 409) {
-        errorMsg = 'Doctor profile is already verified';
-      } else if (err.response?.status === 404) {
-        errorMsg = 'Doctor profile not found';
-      } else if (err.response?.status === 400) {
-        errorMsg = 'Invalid doctor profile ID';
-      } else if (err.response?.data?.error) {
-        errorMsg = err.response.data.error;
-      }
-      
-      setVerifyError(errorMsg);
-      setTimeout(() => setVerifyError(null), 5000); // Clear error after 5 seconds
+      setVerifyError(err.response?.data?.error || 'Failed to verify doctor');
+      setTimeout(() => setVerifyError(null), 5000);
     } finally {
       setVerifyingId(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div style={{ textAlign: 'center', padding: '40px' }}>
-        <div>Loading Admin Dashboard...</div>
-      </div>
-    );
-  }
+  if (loading) return <div className="main-content">Accessing Secure Admin Vault...</div>;
 
-  if (error) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <div className="error-message" style={{
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.5)',
-          color: 'rgb(239, 68, 68)',
-          padding: '12px',
-          borderRadius: '8px',
-          marginBottom: '20px'
-        }}>
-          <strong>Error:</strong> {error}
-        </div>
-        <button className="btn btn-primary" onClick={fetchData}>
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (!analytics) {
-    return (
-      <div style={{ padding: '20px' }}>
-        <div className="warning-message" style={{
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid rgba(245, 158, 11, 0.5)',
-          color: 'rgb(245, 158, 11)',
-          padding: '12px',
-          borderRadius: '8px'
-        }}>
-          No analytics data available
-        </div>
-      </div>
-    );
-  }
-
-  const revenueData = {
-    labels: Object.keys(analytics?.revenueByDoctor || {}),
-    datasets: [{
-      label: 'Revenue ($)',
-      data: Object.values(analytics?.revenueByDoctor || {}),
-      backgroundColor: 'rgba(59, 130, 246, 0.8)',
-    }]
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: { labels: { color: 'var(--text-main)' } }
+    },
+    scales: {
+      x: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(203, 213, 225, 0.2)' } },
+      y: { ticks: { color: 'var(--text-muted)' }, grid: { color: 'rgba(203, 213, 225, 0.2)' } }
+    }
   };
 
   const statusData = {
     labels: Object.keys(analytics?.appointmentsByStatus || {}),
     datasets: [{
-      label: 'Appointments',
       data: Object.values(analytics?.appointmentsByStatus || {}),
-      backgroundColor: [
-        'rgba(16, 185, 129, 0.8)', // COMPLETED (green)
-        'rgba(245, 158, 11, 0.8)', // PENDING (yellow)
-        'rgba(59, 130, 246, 0.8)', // CONFIRMED (blue)
-        'rgba(239, 68, 68, 0.8)'   // CANCELLED (red)
-      ],
-      borderWidth: 0
+      backgroundColor: ['#10b981', '#f59e0b', '#3b82f6', '#ef4444', '#6366f1'],
     }]
-  };
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: { labels: { color: '#f8fafc' } }
-    },
-    scales: {
-      x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51, 65, 85, 0.3)' } },
-      y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(51, 65, 85, 0.3)' } }
-    }
   };
 
   return (
     <div>
-      <h2 style={{ marginBottom: '24px' }}>Admin Overview</h2>
-      
-      {/* Error notification for verification failures */}
-      {verifyError && (
-        <div className="error-message" style={{
-          backgroundColor: 'rgba(239, 68, 68, 0.1)',
-          border: '1px solid rgba(239, 68, 68, 0.5)',
-          color: 'rgb(239, 68, 68)',
-          padding: '12px',
-          borderRadius: '8px',
-          marginBottom: '20px'
-        }}>
-          {verifyError}
-        </div>
-      )}
+      <h2 style={{ marginBottom: '24px' }}>Admin Management Center</h2>
       
       <div className="dashboard-grid">
         <div className="glass-panel stat-card">
           <span className="stat-title">Total Revenue</span>
-          <span className="stat-value" style={{ color: 'var(--color-primary)' }}>
-            ${analytics?.totalRevenue ? analytics.totalRevenue.toFixed(2) : '0.00'}
-          </span>
+          <span className="stat-value" style={{ color: 'var(--color-primary)' }}>${analytics?.totalRevenue?.toFixed(2) || '0.00'}</span>
         </div>
         <div className="glass-panel stat-card">
-          <span className="stat-title">Total Appointments</span>
+          <span className="stat-title">Appointments</span>
           <span className="stat-value">{analytics?.totalAppointments || 0}</span>
         </div>
         <div className="glass-panel stat-card">
@@ -205,92 +122,122 @@ const AdminDashboard = () => {
           <span className="stat-value">{analytics?.totalDoctors || 0}</span>
         </div>
         <div className="glass-panel stat-card">
-          <span className="stat-title">Registered Patients</span>
+          <span className="stat-title">Verified Patients</span>
           <span className="stat-value">{analytics?.totalPatients || 0}</span>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '24px', marginBottom: '32px' }}>
         <div className="glass-panel">
-          <h3 style={{ marginBottom: '16px' }}>Revenue by Doctor</h3>
-          {Object.keys(analytics?.revenueByDoctor || {}).length > 0 ? (
-            <Bar data={revenueData} options={chartOptions} />
-          ) : (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
-              No revenue data available yet
-            </p>
-          )}
+          <h3 style={{ marginBottom: '16px' }}>Revenue Distribution</h3>
+          <Bar data={{
+            labels: Object.keys(analytics?.revenueByDoctor || {}),
+            datasets: [{ label: 'Revenue ($)', data: Object.values(analytics?.revenueByDoctor || {}), backgroundColor: 'var(--color-primary)' }]
+          }} options={chartOptions} />
         </div>
-        <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <h3 style={{ marginBottom: '16px', alignSelf: 'flex-start' }}>Appointments Breakdown</h3>
-          {Object.keys(analytics?.appointmentsByStatus || {}).length > 0 ? (
-            <div style={{ width: '80%', margin: 'auto' }}>
-              <Pie data={statusData} options={{ plugins: { legend: { position: 'bottom', labels: { color: '#f8fafc' } } } }} />
-            </div>
-          ) : (
-            <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '20px' }}>
-              No appointment data available
-            </p>
-          )}
+        <div className="glass-panel">
+          <h3 style={{ marginBottom: '16px' }}>Appointment Status</h3>
+          <div style={{ padding: '20px' }}>
+            <Pie data={statusData} options={{ plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-main)' } } } }} />
+          </div>
         </div>
       </div>
 
       <div className="glass-panel">
-        <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          Pending Doctor Verifications
-          {pendingDoctors && pendingDoctors.length > 0 && (
-            <span className="badge badge-warning">{pendingDoctors.length} Action Needed</span>
-          )}
-        </h3>
-        
-        {(!pendingDoctors || pendingDoctors.length === 0) ? (
-          <p style={{ color: 'var(--text-muted)' }}>✓ No pending doctor profiles to verify.</p>
-        ) : (
+        <div style={{ display: 'flex', gap: '12px', marginBottom: '24px', borderBottom: '1px solid var(--panel-border)', paddingBottom: '16px' }}>
+          <button className={`btn ${activeTab === 'pending' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('pending')}>
+            Pending Verifications ({pendingDoctors.length})
+          </button>
+          <button className={`btn ${activeTab === 'doctors' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('doctors')}>
+            Manage Doctors
+          </button>
+          <button className={`btn ${activeTab === 'patients' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('patients')}>
+            Manage Patients
+          </button>
+          <button className={`btn ${activeTab === 'appointments' ? 'btn-primary' : 'btn-outline'}`} onClick={() => setActiveTab('appointments')}>
+            All Appointments
+          </button>
+        </div>
+
+        {activeTab === 'pending' && (
           <div style={{ overflowX: 'auto' }}>
             <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Specialty</th>
-                  <th>Mode</th>
-                  <th>Fees</th>
-                  <th>Registered</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
+              <thead><tr><th>Doctor</th><th>Email</th><th>Specialty</th><th>Action</th></tr></thead>
               <tbody>
-                {pendingDoctors.map(doctor => (
-                  <tr key={doctor.id}>
+                {pendingDoctors.map(doc => (
+                  <tr key={doc.id}>
+                    <td><b>{doc.name}</b></td>
+                    <td>{doc.email}</td>
+                    <td><span className="badge badge-info">{doc.specialty}</span></td>
                     <td>
-                      <strong>{doctor.name || 'N/A'}</strong>
-                    </td>
-                    <td>{doctor.email || 'N/A'}</td>
-                    <td>{doctor.specialty || 'N/A'}</td>
-                    <td>
-                      <span style={{
-                        backgroundColor: doctor.mode === 'ONLINE' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(16, 185, 129, 0.2)',
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        fontSize: '0.85rem'
-                      }}>
-                        {doctor.mode || 'N/A'}
-                      </span>
-                    </td>
-                    <td>${doctor.fees || '0.00'}</td>
-                    <td>{doctor.registrationTimeAgo || 'Unknown'}</td>
-                    <td>
-                      <button 
-                        className="btn btn-primary"
-                        onClick={() => handleVerify(doctor.id, doctor.name)}
-                        disabled={verifyingId === doctor.id || !doctor.id}
-                        style={{
-                          opacity: verifyingId === doctor.id ? 0.6 : 1,
-                          cursor: verifyingId === doctor.id ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {verifyingId === doctor.id ? 'Verifying...' : 'Verify Profile'}
+                      <button className="btn btn-primary" onClick={() => handleVerify(doc.id, doc.name)} disabled={verifyingId === doc.id}>
+                        {verifyingId === doc.id ? 'Verifying...' : 'Verify Now'}
                       </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'doctors' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Specialty</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                {allDoctors.map(doc => (
+                  <tr key={doc.id}>
+                    <td><b>{doc.name}</b></td>
+                    <td>{doc.email}</td>
+                    <td>{doc.specialty}</td>
+                    <td>{doc.verified ? <span className="badge badge-success">Verified</span> : <span className="badge badge-warning">Pending</span>}</td>
+                    <td>
+                      <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} 
+                        onClick={() => handleDeleteUser(doc.id, doc.name)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'patients' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+              <tbody>
+                {allPatients.map(p => (
+                  <tr key={p.id}>
+                    <td><b>{p.name}</b></td>
+                    <td>{p.email}</td>
+                    <td>{p.phone}</td>
+                    <td>
+                      <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} 
+                        onClick={() => handleDeleteUser(p.id, p.name)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {activeTab === 'appointments' && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead><tr><th>Patient</th><th>Doctor</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                {allAppointments.map(a => (
+                  <tr key={a.id}>
+                    <td>{a.patientName}</td>
+                    <td>{a.doctorName}</td>
+                    <td>{new Date(a.appointmentStart).toLocaleDateString()}</td>
+                    <td><span className="badge badge-info">{a.status}</span></td>
+                    <td>
+                      <button className="btn btn-outline" style={{ color: 'var(--color-danger)', borderColor: 'var(--color-danger)' }} 
+                        onClick={() => handleDeleteAppointment(a.id)}>Cancel/Remove</button>
                     </td>
                   </tr>
                 ))}

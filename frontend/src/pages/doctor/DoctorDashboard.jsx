@@ -3,6 +3,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import api from '../../utils/api';
 import { format } from 'date-fns';
+import { Activity } from 'lucide-react';
 
 const DoctorDashboard = () => {
   const [stats, setStats] = useState(null);

@@ -30,5 +30,13 @@ public class DoctorProfile {
     private Double fees = 0.0;
 
     @Column(name = "is_verified")
-    private boolean isVerified = false; // Must be verified by Admin
+    private Boolean verified = false;
+
+    public boolean isVerified() {
+        return verified != null && verified;
+    }
+
+    public void setVerified(boolean verified) {
+        this.verified = verified;
+    }
 }

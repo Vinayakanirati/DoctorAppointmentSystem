@@ -28,7 +28,26 @@ public class Slot {
     private LocalDateTime endTime;
 
     @Column(name = "is_booked")
-    private boolean isBooked = false;
+    private Boolean booked = false;
+
+    @Column(name = "is_deleted")
+    private Boolean deleted = false;
+
+    public boolean isBooked() {
+        return booked != null && booked;
+    }
+
+    public boolean isDeleted() {
+        return deleted != null && deleted;
+    }
+
+    public void setBooked(boolean booked) {
+        this.booked = booked;
+    }
+
+    public void setDeleted(boolean deleted) {
+        this.deleted = deleted;
+    }
 
     // Optimistic locking for concurrency
     @Version

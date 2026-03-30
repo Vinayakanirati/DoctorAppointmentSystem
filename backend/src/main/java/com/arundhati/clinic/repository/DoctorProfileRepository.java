@@ -11,8 +11,8 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Lo
     Optional<DoctorProfile> findByUserId(Long userId);
     
     // Get all unverified doctors efficiently using database query
-    java.util.List<DoctorProfile> findByIsVerifiedFalse();
+    java.util.List<DoctorProfile> findByVerifiedFalse();
     
     // Count unverified doctors
-    long countByIsVerifiedFalse();
+    long countByVerifiedFalse();
 }

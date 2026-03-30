@@ -11,6 +11,6 @@ import java.util.List;
 public interface SlotRepository extends JpaRepository<Slot, Long> {
     List<Slot> findByDoctorIdAndStartTimeBetween(Long doctorId, LocalDateTime start, LocalDateTime end);
     List<Slot> findByDoctorId(Long doctorId);
-    List<Slot> findByDoctorIdAndIsBookedFalse(Long doctorId);
+    List<Slot> findByDoctorIdAndBookedFalse(Long doctorId);
     java.util.Optional<Slot> findByDoctorIdAndStartTime(Long doctorId, java.time.LocalDateTime startTime);
 }

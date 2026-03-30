@@ -17,10 +17,16 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(
-            @Valid @RequestBody RegisterRequest request
-    ) {
+    public ResponseEntity<String> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));
+    }
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<AuthResponse> verifyOtp(
+            @RequestParam String email,
+            @RequestParam String otp
+    ) {
+        return ResponseEntity.ok(authService.verifyOtp(email, otp));
     }
 
     @PostMapping("/login")
@@ -28,5 +34,10 @@ public class AuthController {
             @Valid @RequestBody AuthRequest request
     ) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/resend-otp")
+    public ResponseEntity<String> resendOtp(@RequestParam String email) {
+        return ResponseEntity.ok(authService.resendOtp(email));
     }
 }

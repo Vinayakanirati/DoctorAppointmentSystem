@@ -12,6 +12,9 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
+    @org.springframework.beans.factory.annotation.Value("${spring.mail.username}")
+    private String fromEmail;
+
     @Async
     public void sendEmail(String to, String subject, String body) {
         try {
@@ -19,10 +22,13 @@ public class EmailService {
             message.setTo(to);
             message.setSubject(subject);
             message.setText(body);
-            message.setFrom("arundhaticlinicapp@gmail.com");
+            message.setFrom(fromEmail);
             mailSender.send(message);
+            System.out.println("Email sent successfully to: " + to);
         } catch (Exception e) {
-            System.err.println("Error sending email: " + e.getMessage());
+            System.err.println("FAILED TO SEND EMAIL TO: " + to);
+            System.err.println("Error details: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 }

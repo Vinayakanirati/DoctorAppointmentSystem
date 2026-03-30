@@ -73,25 +73,29 @@ const PatientHistory = () => {
             </thead>
             <tbody>
               {appointments.sort((a,b) => {
-                const slotA = a?.slot?.startTime;
-                const slotB = b?.slot?.startTime;
-                if (!slotA || !slotB) return 0;
-                return new Date(slotB) - new Date(slotA);
+                const dateA = a?.appointmentStart;
+                const dateB = b?.appointmentStart;
+                if (!dateA || !dateB) return 0;
+                return new Date(dateB) - new Date(dateA);
               }).map(app => {
                 if (!app || !app.id) return null;
                 
-                const doctorName = app.slot?.doctor?.name || 'Unknown Doctor';
-                const specialty = app.slot?.doctor?.doctorProfile?.specialty || 'Specialist';
-                const startTime = app.slot?.startTime;
+                const doctorName = app.doctorName || 'Doctor';
+                const specialty = app.doctorSpecialty || 'General Specialist';
+                const startTime = app.appointmentStart;
                 const meetingLink = app.meetingLink;
                 const amountPaid = app.amountPaid !== undefined ? Number(app.amountPaid).toFixed(2) : '0.00';
                 const status = app.status || 'SCHEDULED';
-                const doctorId = app.slot?.doctor?.id;
+                
+                // Add "Dr. " if not present
+                const doctorDisplay = doctorName.trim().toLowerCase().startsWith('dr') 
+                  ? doctorName.trim() 
+                  : `Dr. ${doctorName.trim()}`;
                 
                 return (
                   <tr key={app.id}>
                     <td>
-                      <strong>Dr. {doctorName}</strong><br/>
+                      <strong>{doctorDisplay}</strong><br/>
                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
                         {specialty}
                       </span>
@@ -123,7 +127,7 @@ const PatientHistory = () => {
                     </td>
                     <td>${amountPaid}</td>
                     <td>
-                      {status === 'CONFIRMED' ? (
+                      {status === 'CONFIRMED' || status === 'SCHEDULED' ? (
                         <button 
                           className="btn btn-outline" 
                           style={{ color: '#f87171', border: '1px solid #f87171', padding: '6px 12px' }} 
@@ -132,13 +136,7 @@ const PatientHistory = () => {
                           Cancel
                         </button>
                       ) : (
-                        <button 
-                          className="btn btn-primary" 
-                          style={{ padding: '6px 12px' }} 
-                          onClick={() => navigate(`/patient/book/${doctorId || 'unknown'}`)}
-                        >
-                          Rebook
-                        </button>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No Actions</span>
                       )}
                     </td>
                   </tr>

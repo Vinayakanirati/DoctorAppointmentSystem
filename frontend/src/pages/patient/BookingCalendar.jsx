@@ -130,11 +130,13 @@ const BookingCalendar = () => {
   const daySlots = slots.filter(s => s && s.startTime && s.startTime.startsWith(selectedDateString));
   const availableSlots = daySlots.filter(isSlotValid);
 
+  const doctorDisplay = doctorName.trim().toLowerCase().startsWith('dr') ? doctorName.trim() : `Dr. ${doctorName.trim()}`;
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
         <button className="btn btn-outline" onClick={() => navigate('/patient/browse')}>← Back</button>
-        <h2 style={{ margin: 0 }}>Book Appointment with Dr. {doctorName}</h2>
+        <h2 style={{ margin: 0 }}>Book Appointment with {doctorDisplay}</h2>
       </div>
 
       {error && (

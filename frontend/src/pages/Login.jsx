@@ -48,11 +48,20 @@ const Login = () => {
       else navigate('/patient/browse');
       
     } catch (err) {
-      const errorMsg = err.response?.data?.message || 
-                       err.response?.status === 401 ? 'Invalid email or password' :
-                       err.message || 'Login failed. Please check your credentials.';
+      console.error('Login error full:', err);
+      let errorMsg = 'Login failed. Please check your credentials.';
+      
+      if (err.response?.data?.message) {
+        errorMsg = err.response.data.message;
+      } else if (err.response?.status === 401) {
+        errorMsg = 'Invalid email or password';
+      } else if (err.response?.status === 403) {
+        errorMsg = 'Your account is not verified yet. Please check your email for the OTP.';
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
       setError(errorMsg);
-      console.error('Login error:', err);
     } finally {
       setLoading(false);
     }
@@ -68,8 +77,15 @@ const Login = () => {
         </div>
         
         {error && (
-          <div className="badge badge-danger" style={{ display: 'block', marginBottom: '16px', padding: '12px' }}>
+          <div className="badge badge-danger" style={{ display: 'block', marginBottom: '16px', padding: '12px', textAlign: 'center' }}>
             {error}
+            {error.toLowerCase().includes('verify') && (
+              <div style={{ marginTop: '12px' }}>
+                <Link to="/register" state={{ email }} style={{ color: 'white', textDecoration: 'underline', fontWeight: 'bold' }}>
+                  Verify Account Now
+                </Link>
+              </div>
+            )}
           </div>
         )}
         

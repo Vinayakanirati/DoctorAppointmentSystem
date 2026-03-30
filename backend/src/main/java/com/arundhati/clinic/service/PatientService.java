@@ -95,20 +95,23 @@ public class PatientService {
             java.time.LocalDateTime now = java.time.LocalDateTime.now();
             for (int i = 0; i < 7; i++) {
                 java.time.LocalDate date = now.toLocalDate().plusDays(i);
-                
+
                 // Working Hours: 8 AM to 5 PM (17:00)
                 for (int hour = 8; hour < 17; hour++) {
                     // Lunch Break: 1 PM to 2 PM (Skip hour 13)
-                    if (hour == 13) continue;
+                    if (hour == 13)
+                        continue;
 
                     java.time.LocalDateTime startTime = date.atTime(hour, 0);
                     java.time.LocalDateTime endTime = startTime.plusHours(1);
 
                     // Skip past slots
-                    if (startTime.isBefore(now)) continue;
+                    if (startTime.isBefore(now))
+                        continue;
 
                     // Check if slot already exists
-                    java.util.Optional<Slot> existingSlot = slotRepository.findByDoctorIdAndStartTime(doctorId, startTime);
+                    java.util.Optional<Slot> existingSlot = slotRepository.findByDoctorIdAndStartTime(doctorId,
+                            startTime);
                     if (existingSlot.isEmpty()) {
                         Slot newSlot = new Slot();
                         newSlot.setDoctor(doctor);
@@ -120,11 +123,13 @@ public class PatientService {
                 }
             }
 
-            // After backfilling, retrieve all unbooked slots
-            List<Slot> slots = slotRepository.findByDoctorIdAndIsBookedFalse(doctorId);
-            
+            // After backfilling, retrieve all unbooked and non-deleted slots
+            List<Slot> slots = slotRepository.findByDoctorIdAndBookedFalse(doctorId);
+            java.time.LocalDateTime nowFinal = now;
+
             return slots.stream()
-                    .filter(slot -> slot.getStartTime().isAfter(now))
+                    .filter(slot -> !slot.isDeleted())
+                    .filter(slot -> slot.getStartTime().isAfter(nowFinal))
                     .map(this::convertSlotsToDTO)
                     .collect(Collectors.toList());
         } catch (Exception e) {
@@ -135,7 +140,7 @@ public class PatientService {
     @Transactional
     public AppointmentDTO bookAppointment(String email, BookAppointmentRequest request) {
         User patient = getPatientUser(email);
-        
+
         try {
             Slot slot = slotRepository.findById(request.getSlotId())
                     .orElseThrow(() -> new BusinessException("Slot not found", HttpStatus.NOT_FOUND));
@@ -155,13 +160,14 @@ public class PatientService {
             appointment.setPatient(patient);
             appointment.setSlot(slot);
             appointment.setStatus(AppointmentStatus.CONFIRMED);
-            appointment.setAmountPaid(request.getAmountPaid() != null ? request.getAmountPaid() : doctorProfile.getFees());
+            appointment
+                    .setAmountPaid(request.getAmountPaid() != null ? request.getAmountPaid() : doctorProfile.getFees());
 
             if (doctorProfile.getMode() == ConsultationMode.ONLINE) {
-                String meetLink = "https://meet.google.com/" + UUID.randomUUID().toString().substring(0, 12);
+                String meetLink = "https://meet.google.com/tpi-brdo-fks";
                 appointment.setMeetingLink(meetLink);
             } else {
-                appointment.setClinicAddress("Arundhati Medical Clinic, Main Building, Suite A");
+                appointment.setClinicAddress("https://maps.app.goo.gl/e2vYshEjDZKi4SYH9");
             }
 
             appointment = appointmentRepository.save(appointment);
@@ -174,7 +180,7 @@ public class PatientService {
             audit.setAmount(appointment.getAmountPaid());
             audit.setPerformedBy(email);
             auditLogRepository.save(audit);
-            
+
             // Payment Received Audit
             if (appointment.getAmountPaid() > 0) {
                 AuditLog paymentAudit = new AuditLog();
@@ -190,50 +196,50 @@ public class PatientService {
             String emailBody;
             if (doctorProfile.getMode() == ConsultationMode.ONLINE) {
                 emailBody = String.format(
-                    "Greetings %s,\n\nYour ONLINE appointment with Dr. %s is Confirmed.\n\n" +
-                    "Timing: %s\n" +
-                    "Amount Paid: $%.2f\n\n" +
-                    "Please join the consultation using this Google Meet Link: %s\n\n" +
-                    "Thank you,\nArundhati Medical Clinic", 
-                    patient.getName(), 
-                    slot.getDoctor().getName(), 
-                    slot.getStartTime().toString(),
-                    appointment.getAmountPaid(),
-                    appointment.getMeetingLink()
-                );
+                        "Greetings %s,\n\nYour ONLINE appointment with Dr. %s is Confirmed.\n\n" +
+                                "Timing: %s\n" +
+                                "Amount Paid: $%.2f\n\n" +
+                                "Please join the consultation using this Google Meet Link: %s\n\n" +
+                                "Thank you,\nArundhati Medical Clinic",
+                        patient.getName(),
+                        slot.getDoctor().getName(),
+                        slot.getStartTime().toString(),
+                        appointment.getAmountPaid(),
+                        appointment.getMeetingLink());
             } else {
                 emailBody = String.format(
-                    "Greetings %s,\n\nYour OFFLINE appointment with Dr. %s is Confirmed.\n\n" +
-                    "Timing: %s\n" +
-                    "Amount Paid: $%.2f\n\n" +
-                    "Address: %s\n\n" +
-                    "Instructions:\n" +
-                    "- Please wear a mask at all times.\n" +
-                    "- Reach the clinic 15 minutes on time prior to your slot.\n" +
-                    "- Note: Additional charges for prescribed medicine and tests may apply during your visit.\n\n" +
-                    "Thank you,\nArundhati Medical Clinic", 
-                    patient.getName(), 
-                    slot.getDoctor().getName(), 
-                    slot.getStartTime().toString(),
-                    appointment.getAmountPaid(),
-                    appointment.getClinicAddress()
-                );
+                        "Greetings %s,\n\nYour OFFLINE appointment with Dr. %s is Confirmed.\n\n" +
+                                "Timing: %s\n" +
+                                "Amount Paid: $%.2f\n\n" +
+                                "Address: %s\n\n" +
+                                "Instructions:\n" +
+                                "- Please wear a mask at all times.\n" +
+                                "- Reach the clinic 15 minutes on time prior to your slot.\n" +
+                                "- Note: Additional charges for prescribed medicine and tests may apply during your visit.\n\n"
+                                +
+                                "Thank you,\nArundhati Medical Clinic",
+                        patient.getName(),
+                        slot.getDoctor().getName(),
+                        slot.getStartTime().toString(),
+                        appointment.getAmountPaid(),
+                        appointment.getClinicAddress());
             }
-            
+
             emailService.sendEmail(patient.getEmail(), "Appointment Confirmed - Arundhati Clinic", emailBody);
-            
-            String doctorEmailBody = String.format("Dear Dr. %s,\n\nA new %s appointment was booked by patient %s for slot: %s.",
+
+            String doctorEmailBody = String.format(
+                    "Dear Dr. %s,\n\nA new %s appointment was booked by patient %s for slot: %s.",
                     slot.getDoctor().getName(),
                     doctorProfile.getMode().name(),
                     patient.getName(),
-                    slot.getStartTime().toString()
-            );
+                    slot.getStartTime().toString());
             emailService.sendEmail(slot.getDoctor().getEmail(), "New Appointment Booked", doctorEmailBody);
 
             return convertAppointmentToDTO(appointment);
 
         } catch (ObjectOptimisticLockingFailureException ex) {
-            throw new BusinessException("Slot was just booked by someone else. Please try another slot.", HttpStatus.CONFLICT);
+            throw new BusinessException("Slot was just booked by someone else. Please try another slot.",
+                    HttpStatus.CONFLICT);
         }
     }
 
@@ -255,13 +261,14 @@ public class PatientService {
             throw new BusinessException("Access denied", HttpStatus.FORBIDDEN);
         }
 
-        if (appointment.getStatus() != AppointmentStatus.SCHEDULED && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+        if (appointment.getStatus() != AppointmentStatus.SCHEDULED
+                && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
             throw new BusinessException("Can only cancel scheduled or confirmed appointments", HttpStatus.BAD_REQUEST);
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
         appointment.getSlot().setBooked(false);
-        
+
         slotRepository.save(appointment.getSlot());
         appointmentRepository.save(appointment);
 
@@ -275,7 +282,9 @@ public class PatientService {
         auditLogRepository.save(audit);
 
         // Send Email
-        emailService.sendEmail(patient.getEmail(), "Appointment Cancelled", "Your appointment has been cancelled successfully as requested.");
-        emailService.sendEmail(appointment.getSlot().getDoctor().getEmail(), "Appointment Cancelled", "Appointment with patient " + patient.getName() + " has been cancelled.");
+        emailService.sendEmail(patient.getEmail(), "Appointment Cancelled",
+                "Your appointment has been cancelled successfully as requested.");
+        emailService.sendEmail(appointment.getSlot().getDoctor().getEmail(), "Appointment Cancelled",
+                "Appointment with patient " + patient.getName() + " has been cancelled.");
     }
 }

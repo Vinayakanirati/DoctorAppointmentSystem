@@ -3,6 +3,7 @@ package com.arundhati.clinic.controller;
 import com.arundhati.clinic.dto.AdminAnalyticsDTO;
 import com.arundhati.clinic.dto.PendingDoctorDTO;
 import com.arundhati.clinic.entity.DoctorProfile;
+import com.arundhati.clinic.entity.User;
 import com.arundhati.clinic.service.AdminService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -101,6 +102,33 @@ public class AdminController {
      * Get count of pending doctors needing verification
      * @return count as a map
      */
+    @GetMapping("/doctors")
+    public ResponseEntity<List<PendingDoctorDTO>> getAllDoctors() {
+        return ResponseEntity.ok(adminService.getAllDoctors());
+    }
+
+    @GetMapping("/patients")
+    public ResponseEntity<List<User>> getAllPatients() {
+        return ResponseEntity.ok(adminService.getAllPatients());
+    }
+
+    @GetMapping("/appointments")
+    public ResponseEntity<List<?>> getAllAppointments() {
+        return ResponseEntity.ok(adminService.getAllAppointments());
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public ResponseEntity<String> deleteUser(@PathVariable Long userId) {
+        adminService.deleteUser(userId);
+        return ResponseEntity.ok("User deleted successfully");
+    }
+
+    @DeleteMapping("/appointments/{appointmentId}")
+    public ResponseEntity<String> deleteAppointment(@PathVariable Long appointmentId) {
+        adminService.deleteAppointment(appointmentId);
+        return ResponseEntity.ok("Appointment deleted successfully");
+    }
+
     @GetMapping("/doctors/pending/count")
     public ResponseEntity<Map<String, Long>> getPendingDoctorCount() {
         log.debug("AdminController: GET /api/admin/doctors/pending/count");

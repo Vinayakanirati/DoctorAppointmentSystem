@@ -117,7 +117,7 @@ public class DoctorService {
                 LocalDateTime startTime = date.atTime(hour, 0);
                 LocalDateTime endTime = startTime.plusHours(1);
 
-                // Check if slot already exists
+                // Check if slot already exists (including deleted ones)
                 java.util.Optional<Slot> existingSlot = slotRepository.findByDoctorIdAndStartTime(doctorId, startTime);
                 if (existingSlot.isEmpty()) {
                     Slot newSlot = new Slot();
@@ -125,6 +125,7 @@ public class DoctorService {
                     newSlot.setStartTime(startTime);
                     newSlot.setEndTime(endTime);
                     newSlot.setBooked(false);
+                    newSlot.setDeleted(false);
                     slotRepository.save(newSlot);
                 }
             }
@@ -132,7 +133,8 @@ public class DoctorService {
 
         return slotRepository.findByDoctorId(doctor.getId())
                 .stream()
-                .filter(slot -> slot.getStartTime().isAfter(now.minusDays(1))) // Show recent and future
+                .filter(slot -> !slot.isDeleted()) // Exclude deleted
+                .filter(slot -> slot.getStartTime().isAfter(now)) // Exclude past slots ('timed out')
                 .map(this::convertSlotToDTO)
                 .collect(Collectors.toList());
     }
@@ -149,7 +151,9 @@ public class DoctorService {
         if (slot.isBooked()) {
             throw new BusinessException("Cannot delete booked slot. Please cancel the appointment instead.", HttpStatus.BAD_REQUEST);
         }
-        slotRepository.delete(slot);
+        
+        slot.setDeleted(true); // Logical delete
+        slotRepository.save(slot);
     }
 
     public List<AppointmentDTO> getMyDailyAppointments(String email, LocalDate date) {

@@ -4,6 +4,7 @@ import com.arundhati.clinic.dto.AdminAnalyticsDTO;
 import com.arundhati.clinic.dto.PendingDoctorDTO;
 import com.arundhati.clinic.entity.Appointment;
 import com.arundhati.clinic.entity.DoctorProfile;
+import com.arundhati.clinic.entity.User;
 import com.arundhati.clinic.entity.Role;
 import com.arundhati.clinic.exception.BusinessException;
 import com.arundhati.clinic.repository.AppointmentRepository;
@@ -43,7 +44,7 @@ public class AdminService {
     public List<PendingDoctorDTO> getPendingDoctors() {
         log.info("Fetching pending doctor profiles");
         
-        List<DoctorProfile> pendingDoctors = doctorProfileRepository.findByIsVerifiedFalse();
+        List<DoctorProfile> pendingDoctors = doctorProfileRepository.findByVerifiedFalse();
         
         if (pendingDoctors == null || pendingDoctors.isEmpty()) {
             log.debug("No pending doctors found");
@@ -154,11 +155,86 @@ public class AdminService {
     }
 
     /**
+     * Get all verified doctors
+     */
+    public List<PendingDoctorDTO> getAllDoctors() {
+        return doctorProfileRepository.findAll().stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get all registered patients
+     */
+    public List<User> getAllPatients() {
+        return userRepository.findAll().stream()
+                .filter(u -> u.getRole() == Role.PATIENT)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Get all system appointments as DTOs to avoid serialization/lazy loading issues
+     */
+    public List<com.arundhati.clinic.dto.AppointmentDTO> getAllAppointments() {
+        return appointmentRepository.findAll().stream()
+                .map(this::convertToAppointmentDTO)
+                .collect(Collectors.toList());
+    }
+
+    private com.arundhati.clinic.dto.AppointmentDTO convertToAppointmentDTO(Appointment appointment) {
+        if (appointment == null) return null;
+        
+        return com.arundhati.clinic.dto.AppointmentDTO.builder()
+                .id(appointment.getId())
+                .patientName(appointment.getPatient() != null ? appointment.getPatient().getName() : "Unknown Patient")
+                .doctorName(appointment.getSlot() != null && appointment.getSlot().getDoctor() != null ? appointment.getSlot().getDoctor().getName() : "Unknown Doctor")
+                .appointmentStart(appointment.getSlot() != null ? appointment.getSlot().getStartTime() : null)
+                .status(appointment.getStatus())
+                .amountPaid(appointment.getAmountPaid())
+                .createdAt(appointment.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Delete a user by ID (Doctor or Patient)
+     */
+    @Transactional
+    public void deleteUser(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException("User not found", HttpStatus.NOT_FOUND));
+        
+        // If doctor, delete profile first
+        if (user.getRole() == Role.DOCTOR) {
+            doctorProfileRepository.findByUserId(userId).ifPresent(doctorProfileRepository::delete);
+        }
+        
+        userRepository.delete(user);
+    }
+
+    /**
+     * Delete an appointment by ID
+     */
+    @Transactional
+    public void deleteAppointment(Long appointmentId) {
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new BusinessException("Appointment not found", HttpStatus.NOT_FOUND));
+        
+        // Release slot if not completed
+        if (appointment.getSlot() != null) {
+            appointment.getSlot().setBooked(false);
+            // No need to delete slot, just release it
+        }
+        
+        appointmentRepository.delete(appointment);
+    }
+
+    /**
      * Get count of pending doctor verifications
      * @return count of unverified doctors
      */
+    @Transactional
     public long getPendingDoctorCount() {
-        return doctorProfileRepository.countByIsVerifiedFalse();
+        return doctorProfileRepository.countByVerifiedFalse();
     }
 
     /**

@@ -48,15 +48,17 @@ const BrowseDoctors = () => {
       <div className="dashboard-grid">
         {filteredDoctors.map(doc => {
           if (!doc || !doc.id) return null;
-          const doctorName = doc.name || (doc.user?.name) || 'Unknown Doctor';
+          const doctorName = (doc.name || (doc.user?.name) || 'Unknown Doctor').trim();
           const specialty = doc.specialty || 'N/A';
           const fees = doc.fees || 0;
           const mode = doc.mode || 'ONLINE';
           
+          const doctorDisplay = doctorName.toLowerCase().startsWith('dr') ? doctorName : `Dr. ${doctorName}`;
+          
           return (
             <div key={doc.id} className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <h3 style={{ margin: 0 }}>Dr. {doctorName}</h3>
+                <h3 style={{ margin: 0 }}>{doctorDisplay}</h3>
                 <span className={mode === 'ONLINE' ? 'badge badge-success' : 'badge badge-warning'}>
                   {mode}
                 </span>
