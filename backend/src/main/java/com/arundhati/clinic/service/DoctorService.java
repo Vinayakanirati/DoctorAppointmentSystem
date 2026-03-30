@@ -1,6 +1,8 @@
 package com.arundhati.clinic.service;
 
+import com.arundhati.clinic.dto.AppointmentDTO;
 import com.arundhati.clinic.dto.DashboardStats;
+import com.arundhati.clinic.dto.SlotDTO;
 import com.arundhati.clinic.dto.SlotRequest;
 import com.arundhati.clinic.entity.*;
 import com.arundhati.clinic.exception.BusinessException;
@@ -43,8 +45,40 @@ public class DoctorService {
         return profile;
     }
 
+    private SlotDTO convertSlotToDTO(Slot slot) {
+        return SlotDTO.builder()
+                .id(slot.getId())
+                .startTime(slot.getStartTime())
+                .endTime(slot.getEndTime())
+                .isBooked(slot.isBooked())
+                .doctorId(slot.getDoctor().getId())
+                .build();
+    }
+
+    private AppointmentDTO convertAppointmentToDTO(Appointment appointment) {
+        return AppointmentDTO.builder()
+                .id(appointment.getId())
+                .patientName(appointment.getPatient().getName())
+                .doctorName(appointment.getSlot().getDoctor().getName())
+                .consultationMode(doctorProfileRepository.findByUserId(appointment.getSlot().getDoctor().getId())
+                        .map(DoctorProfile::getMode)
+                        .orElse(ConsultationMode.ONLINE))
+                .doctorSpecialty(doctorProfileRepository.findByUserId(appointment.getSlot().getDoctor().getId())
+                        .map(DoctorProfile::getSpecialty)
+                        .orElse("General"))
+                .appointmentStart(appointment.getSlot().getStartTime())
+                .appointmentEnd(appointment.getSlot().getEndTime())
+                .status(appointment.getStatus())
+                .amountPaid(appointment.getAmountPaid())
+                .meetingLink(appointment.getMeetingLink())
+                .clinicAddress(appointment.getClinicAddress())
+                .createdAt(appointment.getCreatedAt())
+                .updatedAt(appointment.getUpdatedAt())
+                .build();
+    }
+
     @Transactional
-    public Slot createSlot(String email, SlotRequest request) {
+    public SlotDTO createSlot(String email, SlotRequest request) {
         User doctor = getDoctorUser(email);
         getVerifiedProfile(doctor.getId()); // ensure verified
 
@@ -61,12 +95,46 @@ public class DoctorService {
         slot.setEndTime(request.getEndTime());
         slot.setBooked(false);
 
-        return slotRepository.save(slot);
+        slot = slotRepository.save(slot);
+        return convertSlotToDTO(slot);
     }
 
-    public List<Slot> getMySlots(String email) {
+    @Transactional
+    public List<SlotDTO> getMySlots(String email) {
         User doctor = getDoctorUser(email);
-        return slotRepository.findByDoctorId(doctor.getId());
+        Long doctorId = doctor.getId();
+
+        // Auto-Backfill slots for the next 7 days
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = now.toLocalDate().plusDays(i);
+            
+            // Working Hours: 8 AM to 5 PM (17:00)
+            for (int hour = 8; hour < 17; hour++) {
+                // Lunch Break: 1 PM to 2 PM (Skip hour 13)
+                if (hour == 13) continue;
+
+                LocalDateTime startTime = date.atTime(hour, 0);
+                LocalDateTime endTime = startTime.plusHours(1);
+
+                // Check if slot already exists
+                java.util.Optional<Slot> existingSlot = slotRepository.findByDoctorIdAndStartTime(doctorId, startTime);
+                if (existingSlot.isEmpty()) {
+                    Slot newSlot = new Slot();
+                    newSlot.setDoctor(doctor);
+                    newSlot.setStartTime(startTime);
+                    newSlot.setEndTime(endTime);
+                    newSlot.setBooked(false);
+                    slotRepository.save(newSlot);
+                }
+            }
+        }
+
+        return slotRepository.findByDoctorId(doctor.getId())
+                .stream()
+                .filter(slot -> slot.getStartTime().isAfter(now.minusDays(1))) // Show recent and future
+                .map(this::convertSlotToDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -84,15 +152,18 @@ public class DoctorService {
         slotRepository.delete(slot);
     }
 
-    public List<Appointment> getMyDailyAppointments(String email, LocalDate date) {
+    public List<AppointmentDTO> getMyDailyAppointments(String email, LocalDate date) {
         User doctor = getDoctorUser(email);
         LocalDateTime start = date.atStartOfDay();
         LocalDateTime end = date.atTime(23, 59, 59);
-        return appointmentRepository.findBySlotDoctorIdAndSlotStartTimeBetween(doctor.getId(), start, end);
+        return appointmentRepository.findBySlotDoctorIdAndSlotStartTimeBetween(doctor.getId(), start, end)
+                .stream()
+                .map(this::convertAppointmentToDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional
-    public Appointment updateAppointmentStatus(String email, Long appointmentId, AppointmentStatus newStatus) {
+    public AppointmentDTO updateAppointmentStatus(String email, Long appointmentId, AppointmentStatus newStatus) {
         User doctor = getDoctorUser(email);
         Appointment appointment = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new BusinessException("Appointment not found", HttpStatus.NOT_FOUND));
@@ -127,7 +198,7 @@ public class DoctorService {
         }
         auditLogRepository.save(audit);
 
-        return appointment;
+        return convertAppointmentToDTO(appointment);
     }
 
     public DashboardStats getDashboardStats(String email) {
@@ -148,7 +219,8 @@ public class DoctorService {
         if (totalEarnings == null) totalEarnings = 0.0;
         
         double todayEarnings = allAppointments.stream()
-                .filter(a -> a.getStatus() == AppointmentStatus.COMPLETED && a.getSlot().getStartTime().toLocalDate().equals(today))
+                .filter(a -> (a.getStatus() == AppointmentStatus.COMPLETED || a.getStatus() == AppointmentStatus.CONFIRMED || a.getStatus() == AppointmentStatus.SCHEDULED) 
+                        && a.getSlot().getStartTime().toLocalDate().equals(today))
                 .mapToDouble(Appointment::getAmountPaid)
                 .sum();
 

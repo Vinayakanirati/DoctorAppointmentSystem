@@ -1,6 +1,7 @@
 package com.arundhati.clinic.service;
 
 import com.arundhati.clinic.dto.AdminAnalyticsDTO;
+import com.arundhati.clinic.dto.PendingDoctorDTO;
 import com.arundhati.clinic.entity.Appointment;
 import com.arundhati.clinic.entity.DoctorProfile;
 import com.arundhati.clinic.entity.Role;
@@ -10,15 +11,22 @@ import com.arundhati.clinic.repository.AuditLogRepository;
 import com.arundhati.clinic.repository.DoctorProfileRepository;
 import com.arundhati.clinic.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class AdminService {
 
     private final UserRepository userRepository;
@@ -27,34 +35,142 @@ public class AdminService {
     private final AuditLogRepository auditLogRepository;
     private final EmailService emailService;
 
-    public List<DoctorProfile> getPendingDoctors() {
-        return doctorProfileRepository.findAll()
-                .stream()
-                .filter(p -> !p.isVerified())
+    /**
+     * Get all pending (unverified) doctors with proper validation
+     * Uses database query instead of loading all and filtering in memory
+     * @return List of pending doctors as DTOs
+     */
+    public List<PendingDoctorDTO> getPendingDoctors() {
+        log.info("Fetching pending doctor profiles");
+        
+        List<DoctorProfile> pendingDoctors = doctorProfileRepository.findByIsVerifiedFalse();
+        
+        if (pendingDoctors == null || pendingDoctors.isEmpty()) {
+            log.debug("No pending doctors found");
+            return List.of();
+        }
+        
+        return pendingDoctors.stream()
+                .filter(Objects::nonNull)
+                .map(this::convertToDTO)
                 .collect(Collectors.toList());
     }
 
-    public DoctorProfile verifyDoctor(Long profileId) {
-        DoctorProfile profile = doctorProfileRepository.findById(profileId)
-                .orElseThrow(() -> new BusinessException("Profile not found", HttpStatus.NOT_FOUND));
-
-        profile.setVerified(true);
-        doctorProfileRepository.save(profile);
-
-        emailService.sendEmail(
-                profile.getUser().getEmail(),
-                "Profile Verified - Arundhati Clinic",
-                "Congratulations! Your doctor profile has been verified by the Admin. You can now login and create slots."
-        );
-
-        return profile;
+    /**
+     * Convert DoctorProfile entity to PendingDoctorDTO
+     */
+    private PendingDoctorDTO convertToDTO(DoctorProfile profile) {
+        if (profile == null || profile.getUser() == null) {
+            log.warn("Invalid doctor profile found");
+            return null;
+        }
+        
+        String timeAgo = formatTimeAgo(profile.getUser().getCreatedAt());
+        
+        return PendingDoctorDTO.builder()
+                .id(profile.getId())
+                .name(profile.getUser().getName())
+                .email(profile.getUser().getEmail())
+                .specialty(profile.getSpecialty())
+                .mode(profile.getMode())
+                .fees(profile.getFees())
+                .phone(profile.getUser().getPhone())
+                .verified(profile.isVerified())
+                .registrationTimeAgo(timeAgo)
+                .build();
     }
 
+    /**
+     * Format timestamp as human-readable time ago
+     */
+    private String formatTimeAgo(LocalDateTime createdAt) {
+        if (createdAt == null) {
+            return "Unknown";
+        }
+        
+        long daysAgo = ChronoUnit.DAYS.between(createdAt, LocalDateTime.now());
+        long hoursAgo = ChronoUnit.HOURS.between(createdAt, LocalDateTime.now());
+        long minutesAgo = ChronoUnit.MINUTES.between(createdAt, LocalDateTime.now());
+        
+        if (daysAgo > 0) {
+            return daysAgo + " day" + (daysAgo > 1 ? "s" : "") + " ago";
+        } else if (hoursAgo > 0) {
+            return hoursAgo + " hour" + (hoursAgo > 1 ? "s" : "") + " ago";
+        } else if (minutesAgo > 0) {
+            return minutesAgo + " minute" + (minutesAgo > 1 ? "s" : "") + " ago";
+        } else {
+            return "Just now";
+        }
+    }
+
+    /**
+     * Verify a doctor profile by ID with validation
+     * @param profileId the doctor profile ID
+     * @return verified DoctorProfile
+     */
+    @Transactional
+    public DoctorProfile verifyDoctor(Long profileId) {
+        // Validate input
+        if (profileId == null || profileId <= 0) {
+            log.warn("Invalid profile ID provided: {}", profileId);
+            throw new BusinessException("Invalid profile ID", HttpStatus.BAD_REQUEST);
+        }
+        
+        log.info("Verifying doctor profile with ID: {}", profileId);
+        
+        DoctorProfile profile = doctorProfileRepository.findById(profileId)
+                .orElseThrow(() -> {
+                    log.warn("Doctor profile not found with ID: {}", profileId);
+                    return new BusinessException("Doctor profile not found", HttpStatus.NOT_FOUND);
+                });
+
+        // Check if already verified
+        if (profile.isVerified()) {
+            log.warn("Doctor profile {} is already verified", profileId);
+            throw new BusinessException("Doctor profile is already verified", HttpStatus.CONFLICT);
+        }
+
+        profile.setVerified(true);
+        DoctorProfile verifiedProfile = doctorProfileRepository.save(profile);
+        
+        log.info("Doctor profile {} verified successfully", profileId);
+
+        // Send email notification
+        try {
+            if (profile.getUser() != null && profile.getUser().getEmail() != null) {
+                emailService.sendEmail(
+                        profile.getUser().getEmail(),
+                        "Profile Verified - Arundhati Clinic",
+                        "Congratulations! Your doctor profile has been verified by the Admin. You can now login and create slots."
+                );
+                log.info("Verification email sent to {}", profile.getUser().getEmail());
+            }
+        } catch (Exception e) {
+            log.error("Failed to send verification email to {}: {}", profile.getUser().getEmail(), e.getMessage());
+            // Don't throw exception, verification was successful even if email fails
+        }
+
+        return verifiedProfile;
+    }
+
+    /**
+     * Get count of pending doctor verifications
+     * @return count of unverified doctors
+     */
+    public long getPendingDoctorCount() {
+        return doctorProfileRepository.countByIsVerifiedFalse();
+    }
+
+    /**
+     * Get system analytics with pending doctors count
+     */
     public AdminAnalyticsDTO getAnalytics() {
+        log.info("Generating admin analytics");
+        
         List<Appointment> allAppointments = appointmentRepository.findAll();
         long totalPatients = userRepository.findAll().stream().filter(u -> u.getRole() == Role.PATIENT).count();
         long totalDoctors = userRepository.findAll().stream().filter(u -> u.getRole() == Role.DOCTOR).count();
-        long pendingDoctors = getPendingDoctors().size();
+        long pendingDoctorsCount = getPendingDoctorCount();
         
         Double totalRev = auditLogRepository.getTotalRevenue();
         if (totalRev == null) totalRev = 0.0;
@@ -72,12 +188,14 @@ public class AdminService {
                         Collectors.summingDouble(Appointment::getAmountPaid)
                 ));
 
+        log.info("Analytics generated - Pending doctors: {}", pendingDoctorsCount);
+
         return AdminAnalyticsDTO.builder()
                 .totalRevenue(totalRev)
                 .totalAppointments(allAppointments.size())
                 .totalPatients(totalPatients)
                 .totalDoctors(totalDoctors)
-                .pendingDoctorVerifications(pendingDoctors)
+                .pendingDoctorVerifications(pendingDoctorsCount)
                 .appointmentsByStatus(byStatus)
                 .appointmentsBySpecialty(bySpecialty)
                 .revenueByDoctor(revByDoctor)

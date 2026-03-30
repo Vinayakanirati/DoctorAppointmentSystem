@@ -1,10 +1,10 @@
 package com.arundhati.clinic.controller;
 
+import com.arundhati.clinic.dto.AppointmentDTO;
 import com.arundhati.clinic.dto.BookAppointmentRequest;
 import com.arundhati.clinic.dto.DoctorDTO;
-import com.arundhati.clinic.entity.Appointment;
+import com.arundhati.clinic.dto.SlotDTO;
 import com.arundhati.clinic.entity.ConsultationMode;
-import com.arundhati.clinic.entity.Slot;
 import com.arundhati.clinic.service.PatientService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,12 +30,12 @@ public class PatientController {
     }
 
     @GetMapping("/doctors/{doctorId}/slots")
-    public ResponseEntity<List<Slot>> getDoctorSlots(@PathVariable Long doctorId) {
+    public ResponseEntity<List<SlotDTO>> getDoctorSlots(@PathVariable Long doctorId) {
         return ResponseEntity.ok(patientService.getDoctorAvailableSlots(doctorId));
     }
 
     @PostMapping("/appointments/book")
-    public ResponseEntity<Appointment> bookAppointment(
+    public ResponseEntity<AppointmentDTO> bookAppointment(
             Authentication authentication,
             @Valid @RequestBody BookAppointmentRequest request
     ) {
@@ -43,7 +43,7 @@ public class PatientController {
     }
 
     @GetMapping("/appointments")
-    public ResponseEntity<List<Appointment>> getHistory(Authentication authentication) {
+    public ResponseEntity<List<AppointmentDTO>> getHistory(Authentication authentication) {
         return ResponseEntity.ok(patientService.getMyHistory(authentication.getName()));
     }
 

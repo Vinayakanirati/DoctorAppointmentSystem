@@ -1,10 +1,10 @@
 package com.arundhati.clinic.controller;
 
+import com.arundhati.clinic.dto.AppointmentDTO;
 import com.arundhati.clinic.dto.DashboardStats;
+import com.arundhati.clinic.dto.SlotDTO;
 import com.arundhati.clinic.dto.SlotRequest;
-import com.arundhati.clinic.entity.Appointment;
 import com.arundhati.clinic.entity.AppointmentStatus;
-import com.arundhati.clinic.entity.Slot;
 import com.arundhati.clinic.service.DoctorService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class DoctorController {
     private final DoctorService doctorService;
 
     @PostMapping("/slots")
-    public ResponseEntity<Slot> createSlot(
+    public ResponseEntity<SlotDTO> createSlot(
             Authentication authentication,
             @Valid @RequestBody SlotRequest request
     ) {
@@ -32,7 +32,7 @@ public class DoctorController {
     }
 
     @GetMapping("/slots")
-    public ResponseEntity<List<Slot>> getMySlots(Authentication authentication) {
+    public ResponseEntity<List<SlotDTO>> getMySlots(Authentication authentication) {
         return ResponseEntity.ok(doctorService.getMySlots(authentication.getName()));
     }
 
@@ -46,7 +46,7 @@ public class DoctorController {
     }
 
     @GetMapping("/appointments")
-    public ResponseEntity<List<Appointment>> getDailyAppointments(
+    public ResponseEntity<List<AppointmentDTO>> getDailyAppointments(
             Authentication authentication,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date
     ) {
@@ -55,7 +55,7 @@ public class DoctorController {
     }
 
     @PatchMapping("/appointments/{appointmentId}/status")
-    public ResponseEntity<Appointment> updateAppointmentStatus(
+    public ResponseEntity<AppointmentDTO> updateAppointmentStatus(
             Authentication authentication,
             @PathVariable Long appointmentId,
             @RequestParam AppointmentStatus status

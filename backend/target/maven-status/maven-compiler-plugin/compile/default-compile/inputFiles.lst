@@ -24,11 +24,14 @@ C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\controller\AdminController.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\controller\DoctorController.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\exception\GlobalExceptionHandler.java
+C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\dto\PendingDoctorDTO.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\entity\Role.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\repository\AppointmentRepository.java
+C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\dto\SlotDTO.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\service\AuthService.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\service\DoctorService.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\entity\AppointmentStatus.java
+C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\dto\AppointmentDTO.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\dto\AuthResponse.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\service\AdminService.java
 C:\Users\Vinayaka\OneDrive\Desktop\DoctorAppointmentSystem\backend\src\main\java\com\arundhati\clinic\controller\AuthController.java

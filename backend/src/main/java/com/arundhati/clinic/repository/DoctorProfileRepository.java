@@ -9,4 +9,10 @@ import java.util.Optional;
 @Repository
 public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, Long> {
     Optional<DoctorProfile> findByUserId(Long userId);
+    
+    // Get all unverified doctors efficiently using database query
+    java.util.List<DoctorProfile> findByIsVerifiedFalse();
+    
+    // Count unverified doctors
+    long countByIsVerifiedFalse();
 }

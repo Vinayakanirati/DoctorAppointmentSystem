@@ -1,7 +1,9 @@
 package com.arundhati.clinic.service;
 
+import com.arundhati.clinic.dto.AppointmentDTO;
 import com.arundhati.clinic.dto.BookAppointmentRequest;
 import com.arundhati.clinic.dto.DoctorDTO;
+import com.arundhati.clinic.dto.SlotDTO;
 import com.arundhati.clinic.entity.*;
 import com.arundhati.clinic.exception.BusinessException;
 import com.arundhati.clinic.repository.AppointmentRepository;
@@ -35,6 +37,38 @@ public class PatientService {
                 .orElseThrow(() -> new BusinessException("Patient not found", HttpStatus.NOT_FOUND));
     }
 
+    private SlotDTO convertSlotsToDTO(Slot slot) {
+        return SlotDTO.builder()
+                .id(slot.getId())
+                .startTime(slot.getStartTime())
+                .endTime(slot.getEndTime())
+                .isBooked(slot.isBooked())
+                .doctorId(slot.getDoctor().getId())
+                .build();
+    }
+
+    private AppointmentDTO convertAppointmentToDTO(Appointment appointment) {
+        return AppointmentDTO.builder()
+                .id(appointment.getId())
+                .patientName(appointment.getPatient().getName())
+                .doctorName(appointment.getSlot().getDoctor().getName())
+                .consultationMode(doctorProfileRepository.findByUserId(appointment.getSlot().getDoctor().getId())
+                        .map(DoctorProfile::getMode)
+                        .orElse(ConsultationMode.ONLINE))
+                .doctorSpecialty(doctorProfileRepository.findByUserId(appointment.getSlot().getDoctor().getId())
+                        .map(DoctorProfile::getSpecialty)
+                        .orElse("General"))
+                .appointmentStart(appointment.getSlot().getStartTime())
+                .appointmentEnd(appointment.getSlot().getEndTime())
+                .status(appointment.getStatus())
+                .amountPaid(appointment.getAmountPaid())
+                .meetingLink(appointment.getMeetingLink())
+                .clinicAddress(appointment.getClinicAddress())
+                .createdAt(appointment.getCreatedAt())
+                .updatedAt(appointment.getUpdatedAt())
+                .build();
+    }
+
     public List<DoctorDTO> browseDoctors(String specialty, ConsultationMode mode) {
         return doctorProfileRepository.findAll().stream()
                 .filter(DoctorProfile::isVerified)
@@ -51,12 +85,55 @@ public class PatientService {
                 .collect(Collectors.toList());
     }
 
-    public List<Slot> getDoctorAvailableSlots(Long doctorId) {
-        return slotRepository.findByDoctorIdAndIsBookedFalse(doctorId);
+    @Transactional
+    public List<SlotDTO> getDoctorAvailableSlots(Long doctorId) {
+        try {
+            User doctor = userRepository.findById(doctorId)
+                    .orElseThrow(() -> new BusinessException("Doctor not found", HttpStatus.NOT_FOUND));
+
+            // Auto-Backfill slots for the next 7 days
+            java.time.LocalDateTime now = java.time.LocalDateTime.now();
+            for (int i = 0; i < 7; i++) {
+                java.time.LocalDate date = now.toLocalDate().plusDays(i);
+                
+                // Working Hours: 8 AM to 5 PM (17:00)
+                for (int hour = 8; hour < 17; hour++) {
+                    // Lunch Break: 1 PM to 2 PM (Skip hour 13)
+                    if (hour == 13) continue;
+
+                    java.time.LocalDateTime startTime = date.atTime(hour, 0);
+                    java.time.LocalDateTime endTime = startTime.plusHours(1);
+
+                    // Skip past slots
+                    if (startTime.isBefore(now)) continue;
+
+                    // Check if slot already exists
+                    java.util.Optional<Slot> existingSlot = slotRepository.findByDoctorIdAndStartTime(doctorId, startTime);
+                    if (existingSlot.isEmpty()) {
+                        Slot newSlot = new Slot();
+                        newSlot.setDoctor(doctor);
+                        newSlot.setStartTime(startTime);
+                        newSlot.setEndTime(endTime);
+                        newSlot.setBooked(false);
+                        slotRepository.save(newSlot);
+                    }
+                }
+            }
+
+            // After backfilling, retrieve all unbooked slots
+            List<Slot> slots = slotRepository.findByDoctorIdAndIsBookedFalse(doctorId);
+            
+            return slots.stream()
+                    .filter(slot -> slot.getStartTime().isAfter(now))
+                    .map(this::convertSlotsToDTO)
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            return java.util.Collections.emptyList();
+        }
     }
 
     @Transactional
-    public Appointment bookAppointment(String email, BookAppointmentRequest request) {
+    public AppointmentDTO bookAppointment(String email, BookAppointmentRequest request) {
         User patient = getPatientUser(email);
         
         try {
@@ -110,31 +187,62 @@ public class PatientService {
             }
 
             // Emails
-            String emailBody = String.format("Dear %s,\n\nYour appointment with Dr. %s is confirmed for %s.\n%s", 
+            String emailBody;
+            if (doctorProfile.getMode() == ConsultationMode.ONLINE) {
+                emailBody = String.format(
+                    "Greetings %s,\n\nYour ONLINE appointment with Dr. %s is Confirmed.\n\n" +
+                    "Timing: %s\n" +
+                    "Amount Paid: $%.2f\n\n" +
+                    "Please join the consultation using this Google Meet Link: %s\n\n" +
+                    "Thank you,\nArundhati Medical Clinic", 
                     patient.getName(), 
                     slot.getDoctor().getName(), 
                     slot.getStartTime().toString(),
-                    doctorProfile.getMode() == ConsultationMode.ONLINE ? "Meet Link: " + appointment.getMeetingLink() : "Address: " + appointment.getClinicAddress()
-            );
+                    appointment.getAmountPaid(),
+                    appointment.getMeetingLink()
+                );
+            } else {
+                emailBody = String.format(
+                    "Greetings %s,\n\nYour OFFLINE appointment with Dr. %s is Confirmed.\n\n" +
+                    "Timing: %s\n" +
+                    "Amount Paid: $%.2f\n\n" +
+                    "Address: %s\n\n" +
+                    "Instructions:\n" +
+                    "- Please wear a mask at all times.\n" +
+                    "- Reach the clinic 15 minutes on time prior to your slot.\n" +
+                    "- Note: Additional charges for prescribed medicine and tests may apply during your visit.\n\n" +
+                    "Thank you,\nArundhati Medical Clinic", 
+                    patient.getName(), 
+                    slot.getDoctor().getName(), 
+                    slot.getStartTime().toString(),
+                    appointment.getAmountPaid(),
+                    appointment.getClinicAddress()
+                );
+            }
+            
             emailService.sendEmail(patient.getEmail(), "Appointment Confirmed - Arundhati Clinic", emailBody);
             
-            String doctorEmailBody = String.format("Dear Dr. %s,\n\nNew appointment booked by %s for %s.",
+            String doctorEmailBody = String.format("Dear Dr. %s,\n\nA new %s appointment was booked by patient %s for slot: %s.",
                     slot.getDoctor().getName(),
+                    doctorProfile.getMode().name(),
                     patient.getName(),
                     slot.getStartTime().toString()
             );
             emailService.sendEmail(slot.getDoctor().getEmail(), "New Appointment Booked", doctorEmailBody);
 
-            return appointment;
+            return convertAppointmentToDTO(appointment);
 
         } catch (ObjectOptimisticLockingFailureException ex) {
             throw new BusinessException("Slot was just booked by someone else. Please try another slot.", HttpStatus.CONFLICT);
         }
     }
 
-    public List<Appointment> getMyHistory(String email) {
+    public List<AppointmentDTO> getMyHistory(String email) {
         User patient = getPatientUser(email);
-        return appointmentRepository.findByPatientId(patient.getId());
+        return appointmentRepository.findByPatientId(patient.getId())
+                .stream()
+                .map(this::convertAppointmentToDTO)
+                .collect(Collectors.toList());
     }
 
     @Transactional
